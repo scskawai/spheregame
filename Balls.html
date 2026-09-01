@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" content="width=device-width,initial-scale=1" />
+  <style>
+    html, body, #canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      border: none;
+      outline: none;
+    }
+  </style>
+</head>
+
+<body style="background-color: #000000">
+  <canvas id="game"> </canvas>
+  <script>
+    const canvas = document.getElementById("game");
+    function expandCanvas(){
+      canvas.width = canvas.clientWidth = window.innerWidth;
+      canvas.height = canvas.clientHeight = window.innerHeight;
+    }
+    expandCanvas();
+    window.onresize = expandCanvas;
+
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "black";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const imR = new Image();
+    imR.src = "images/BallR.png";
+    const imY = new Image();
+    imY.src = "images/BallY.png";
+    const imF1 = new Image();
+    imF1.src = "images/frag1.png";
+    const imF2 = new Image();
+    imF2.src = "images/frag2.png";
+    const imF3 = new Image();
+    imF3.src = "images/frag3.png";
+    const imF4 = new Image();
+    imF4.src = "images/frag4.png";
+    const imF5 = new Image();
+    imF5.src = "images/frag5.png";
+    const imF6 = new Image();
+    imF6.src = "images/frag6.png";
+    const imF7 = new Image();
+    imF7.src = "images/frag7.png";
+    const imF8 = new Image();
+    imF8.src = "images/frag8.png";
+    const diammax = Math.round(Math.max(canvas.width,canvas.height)*0.08);
+    const kT = 1.0;
+    const gm = 0.5e-2;
+    const ex = Math.exp(-gm / 2);
+    const sd = Math.sqrt(kT*(1-ex*ex));
+    const vmx = Math.sqrt(kT)*10;
+    const vm = Math.sqrt(kT/12.0)*8;
+    const nB = 9;
+
+    let ball = Array(nB);
+    for(let j=0; j<nB; ++j)
+    {
+      ball[j] = {cx:(canvas.width*((j % 3)*0.25 + 0.25)), cy:(canvas.height*(Math.floor(j / 3)*0.25 + 0.25)), vx:(Math.random() - 0.5)*vm, vy:(Math.random() - 0.5)*vm, fx:0.0, fy:0.0, s:0.0, c:0, f:0};
+    }
+    for (let i = 0; i < 2000; ++i) propagate();
+   
+    setInterval("update()", 20);
+    canvas.addEventListener('click', onClick, false);
+
+    function radius(s)
+    {
+      return 0 + ((s < 0.5) ? 0.0 : (s - 0.5) * diammax);
+    }
+    function draw(){
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      for(let b of ball)
+      {
+        let r = radius(b.s);
+        let d = r * 2;
+        if( b.c == 0 )
+        {
+          ctx.drawImage(imY, b.cx-r, b.cy-r, d, d);
+        }
+        else if( b.c == 1)
+        {
+          ctx.drawImage(imR, b.cx-r, b.cy-r, d, d);
+        }
+        else
+        {
+          let rh = r * 0.707107;
+          let u = b.f;
+          let v = u * 2 / 5;
+          ctx.drawImage(imF1, b.cx+v, b.cy-r-u, rh, r);
+          ctx.drawImage(imF2, b.cx+u, b.cy-rh-v, r, rh);
+          ctx.drawImage(imF3, b.cx+u, b.cy+v, r, rh);
+          ctx.drawImage(imF4, b.cx+v, b.cy+u, rh, r);
+          ctx.drawImage(imF5, b.cx-rh-v, b.cy+u, rh, r);
+          ctx.drawImage(imF6, b.cx-r-u, b.cy+v, r, rh);
+          ctx.drawImage(imF7, b.cx-r-u, b.cy-rh-v, r, rh);
+          ctx.drawImage(imF8, b.cx-rh-v, b.cy-r-u, rh, r);
+        }
+      }
+    }
+    
+    function nminv(y)
+    {
+      if(y<0.5) return (y<0.25)?-1.:1.;
+      if(y<0.875) return 0;
+      return (y<0.9375)?-2.:2.;
+    }
+    function calcForce()
+    {
+      for (let i = 0; i < nB; ++i)
+      {
+        ball[i].fx = ball[i].fy = 0;
+        let bi = ball[i];
+        if (bi.c==2) continue;
+        let x = bi.cx;
+        let y = bi.cy;
+        let r = radius(bi.s);
+        let rp = r * 2.4;
+        const k0 = 1.0e-9;
+        const k2 = 1.0e-9;
+
+        if (y < rp)
+        {
+          let dr = rp - y;
+          let d2 = dr * dr;
+          let d6 = d2 * d2;
+          ball[i].fy += k0 * d6;
+        }
+        else if (y > canvas.height - rp)
+        {
+          let dr = canvas.height - rp - y;
+          let d2 = dr * dr;
+          let d6 = d2 * d2;
+          ball[i].fy -= k0 * d6;
+        }
+
+        if (x < rp)
+        {
+          let dr = rp - x;
+          let d2 = dr * dr;
+          let d6 = d2 * d2;
+          ball[i].fx += k0 * d6;
+        }
+        else if (x > canvas.width - rp)
+        {
+          let dr = canvas.width - rp - x;
+          let d2 = dr * dr;
+          let d6 = d2 * d2;
+          ball[i].fx -= k0 * d6;
+        }
+
+        for (let j = 0; j < i; ++j)
+        {
+          let bj = ball[j];
+          if(bj.c==2) continue;
+          let rj = radius(bj.s);
+          let r0 = r + rj;
+          let r02 = r0 * r0;
+          let dx = x - bj.cx;
+          let d2 = dx * dx;
+          let dy = y - bj.cy;
+          d2 += dy * dy;
+          let dd2 = d2 - r02;
+          if (dd2 > 0) continue;
+
+          let d6 = k2 * dd2 * dd2;
+          let f = d6 * dx;
+          ball[i].fx += f;
+          ball[j].fx -= f;
+          f = d6 * dy;
+          ball[i].fy += f;
+          ball[j].fy -= f;
+        }
+      }        
+    }
+    function propagate()
+    {
+      for (let i=0; i<nB; ++i)
+      {
+        let bi = ball[i];
+        if (bi.c==2)
+        {
+          bi.f += 20.;
+          if(bi.f>canvas.width)
+          {
+            bi.s = 0;
+            bi.c = 0;
+          }
+          continue;
+        }  
+        if ((bi.c<2)&&(bi.s < 1.0)) bi.s += 0.00075;
+
+        let Bw1 = nminv(Math.random());
+        let Bw2 = nminv(Math.random());
+        let vxnew = bi.vx * ex + Bw1 * sd + bi.fx / 2;
+        ball[i].cx += vxnew;
+        ball[i].vx = vxnew * ex + Bw2 * sd;
+
+        Bw1 = nminv(Math.random());
+        Bw2 = nminv(Math.random());
+        let vynew = bi.vy * ex + Bw1 * sd + bi.fy / 2;
+        ball[i].cy += vynew;
+        ball[i].vy = vynew * ex + Bw2 * sd;
+      }
+
+      calcForce();
+
+      for (let i=0; i<nB; ++i)
+      {
+        let bi = ball[i];
+        if (bi.c==2) continue;
+        ball[i].vx += bi.fx * ex / 2;
+        ball[i].vy += bi.fy * ex / 2;
+
+        if (bi.vx > vmx) bi.vx = vmx;
+        if (bi.vy > vmx) bi.vy = vmx;
+        if (bi.vx < -vmx) bi.vx = -vmx;
+        if (bi.vy < -vmx) bi.vy = -vmx;
+      }
+    }    
+    function onClick(e)
+    {
+      let rect = e.target.getBoundingClientRect();
+      x = e.clientX - rect.left;
+      y = e.clientY - rect.top;
+
+      for (let j=0; j<nB; ++j)
+      {
+        let bj = ball[j];
+        let dx = x - bj.cx;
+        let dy = y - bj.cy;
+        let rj = radius(bj.s);
+        if( dx*dx+dy*dy < rj*rj )
+        {
+          if( bj.c < 2 )
+          {
+            bj.c += 1;
+            if( bj.c == 2)
+            {
+              bj.f = 0;
+            }
+          }
+        }
+      }
+    }
+    function update(){
+      propagate();
+      draw();
+    }
+  </script>
+</body>
+</html>
+
